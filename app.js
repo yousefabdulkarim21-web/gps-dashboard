@@ -6,7 +6,8 @@ function clean(value) { return String(value ?? '').trim(); }
 function key(value) { return clean(value).replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي').replace(/\s+/g,' '); }
 function field(row, names) { const keys = Object.keys(row); const found = keys.find(k => names.some(n => key(k).includes(key(n)))); return found ? clean(row[found]) : ''; }
 function typeForSheet(name) { return types[name] || clean(name); }
-function hasId(c) { return Boolean(c.id); }
+// أرقام البلاغات جاهزة مسبقًا في القالب، لذا لا نعتمد الرقم وحده كبلاغ فعلي.
+function hasId(c) { return Boolean(c.id) && Boolean(c.vehicle || c.date || c.description || c.status || c.duration); }
 function isClosed(c) { return /مغلق|مقف|closed|تم الاغلاق/i.test(c.status); }
 function isOpen(c) { return hasId(c) && !isClosed(c); }
 function dateScore(s) { const t = Date.parse(String(s).replace(/(\d{2})\/(\d{2})\/(\d{4})/,'$3-$2-$1')); return Number.isNaN(t) ? 0 : t; }
@@ -30,9 +31,9 @@ function readFile(file) {
       rows.forEach(row => {
         const c = {
           id: field(row,['رقم البلاغ']), type:typeForSheet(sheetName),
-          vehicle:field(row,['رقم المركبة','المركبة']), date:field(row,['تاريخ البلاغ','تاريخ الدخول','التاريخ']),
+          vehicle:field(row,['رقم المركبة','المركبة']), date:field(row,['تاريخ البلاغ','تاريخ الدخول','تاريخ الرصد','تاريخ المخالفة','التاريخ']),
           status:field(row,['الحالة','حالة بلاغ SAP']), duration:field(row,['مدة التوقف','المدة']),
-          description:field(row,['الوصف','ملاحظات','سبب الدخول']), exitDate:field(row,['تاريخ الخروج'])
+          description:field(row,['الوصف','ملاحظات','سبب الدخول','نوع الحالة','الإجراء المتخذ']), exitDate:field(row,['تاريخ الخروج'])
         };
         if (hasId(c)) allCases.push(c);
       });
