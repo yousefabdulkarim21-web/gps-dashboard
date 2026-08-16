@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>لوحة متابعة GPS</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">قسم GPS · متابعة تشغيلية</p>
+        <h1>لوحة متابعة البلاغات</h1>
+        <p class="subtitle">ارفع أحدث نسخة من سجل البلاغات. تُحلل البيانات داخل المتصفح ولا تُرفع إلى الموقع.</p>
+      </div>
+      <label class="upload" for="fileInput">رفع سجل البلاغات<input id="fileInput" type="file" accept=".xlsx,.xls"></label>
+    </header>
+
+    <section id="emptyState" class="empty-state">
+      <strong>بانتظار ملف سجل البلاغات</strong>
+      <span>اختر ملف Excel الذي يحتوي على: بلاغات التوقف، الورشة، السرعة، واستهلاك الديزل.</span>
+    </section>
+
+    <section id="dashboard" class="hidden">
+      <div class="toolbar">
+        <div id="fileName">—</div>
+        <div id="lastUpdated">—</div>
+      </div>
+
+      <section class="cards" aria-label="المؤشرات الرئيسية">
+        <article class="card navy"><span>إجمالي البلاغات</span><strong id="total">0</strong></article>
+        <article class="card orange"><span>بلاغات مفتوحة</span><strong id="open">0</strong></article>
+        <article class="card green"><span>بلاغات مغلقة</span><strong id="closed">0</strong></article>
+        <article class="card red"><span>بلاغات متأخرة</span><strong id="late">0</strong></article>
+        <article class="card purple"><span>توقف +3 ساعات</span><strong id="stops">0</strong></article>
+        <article class="card blue"><span>مركبات داخل الورشة</span><strong id="workshop">0</strong></article>
+        <article class="card amber"><span>بلاغات سرعة</span><strong id="speed">0</strong></article>
+        <article class="card teal"><span>حالات ديزل</span><strong id="fuel">0</strong></article>
+      </section>
+
+      <section class="grid">
+        <article class="panel">
+          <h2>البلاغات حسب النوع</h2>
+          <div id="typeBars" class="bars"></div>
+        </article>
+        <article class="panel">
+          <h2>الحالات المفتوحة حسب النوع</h2>
+          <div id="openBars" class="bars"></div>
+        </article>
+      </section>
+
+      <section class="panel table-panel">
+        <div class="panel-heading">
+          <div><h2>آخر البلاغات</h2><p>أحدث 15 حالة حسب تاريخ البلاغ</p></div>
+          <select id="typeFilter" aria-label="تصفية النوع"><option value="all">كل الأنواع</option></select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>رقم البلاغ</th><th>النوع</th><th>المركبة</th><th>التاريخ</th><th>الوصف</th><th>الحالة</th></tr></thead>
+            <tbody id="casesTable"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
