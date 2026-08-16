@@ -1,5 +1,6 @@
 const $ = (id) => document.getElementById(id);
 const types = { 'بلاغات التوقف':'توقف', 'دخول وخروج الورشة':'ورشة', 'بلاغات السرعة':'سرعة', 'استهلاك الديزل':'ديزل' };
+const STORAGE_KEY = 'gps-dashboard-last-data-v1';
 let allCases = [];
 
 function clean(value) { return String(value ?? '').trim(); }
@@ -38,7 +39,9 @@ function readFile(file) {
         if (hasId(c)) allCases.push(c);
       });
     });
-    render(file.name);
+    const savedAt = new Date().toISOString();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({cases:allCases, fileName:file.name, savedAt}));
+    render(file.name, savedAt);
   };
   reader.readAsArrayBuffer(file);
 }
@@ -53,9 +56,9 @@ function renderTable() {
   const rows = allCases.filter(c => selected === 'all' || c.type === selected).sort((a,b)=>dateScore(b.date)-dateScore(a.date)).slice(0,15);
   $('casesTable').innerHTML = rows.map(c => `<tr><td>${c.id}</td><td>${c.type}</td><td>${c.vehicle || '—'}</td><td>${c.date || '—'}</td><td>${c.description || '—'}</td><td>${badge(c)}</td></tr>`).join('') || '<tr><td colspan="6">لا توجد بيانات مطابقة</td></tr>';
 }
-function render(fileName) {
+function render(fileName, savedAt) {
   $('emptyState').classList.add('hidden'); $('dashboard').classList.remove('hidden');
-  $('fileName').textContent = `المصدر: ${fileName}`; $('lastUpdated').textContent = `آخر قراءة: ${new Date().toLocaleString('ar-SA')}`;
+  $('fileName').textContent = `المصدر: ${fileName}`; $('lastUpdated').textContent = `آخر تحديث: ${new Date(savedAt || Date.now()).toLocaleString('ar-SA')}`;
   set('total', count(hasId)); set('open', count(isOpen)); set('closed', count(isClosed)); set('late', count(overdue)); set('stops', count(longStop)); set('workshop', count(inWorkshop)); set('speed', count(c=>c.type==='سرعة')); set('fuel', count(c=>c.type==='ديزل'));
   const labels = ['توقف','ورشة','سرعة','ديزل'];
   renderBars('typeBars', labels.map(label=>({label,value:count(c=>c.type===label)})));
@@ -65,3 +68,8 @@ function render(fileName) {
 }
 $('fileInput').addEventListener('change', e => { if(e.target.files[0]) readFile(e.target.files[0]); });
 $('typeFilter').addEventListener('change', renderTable);
+$('clearSaved').addEventListener('click', () => { localStorage.removeItem(STORAGE_KEY); allCases = []; $('dashboard').classList.add('hidden'); $('emptyState').classList.remove('hidden'); });
+try {
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+  if (saved?.cases?.length) { allCases = saved.cases; render(saved.fileName || 'آخر ملف محفوظ', saved.savedAt); }
+} catch (_) { localStorage.removeItem(STORAGE_KEY); }
