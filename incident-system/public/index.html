@@ -6,9 +6,18 @@
   <meta name="theme-color" content="#102f4f">
   <meta name="description" content="نظام داخلي لإنشاء ومتابعة بلاغات أسطول GPS">
   <title>مركز بلاغات GPS</title>
-  <link rel="stylesheet" href="/styles.css?v=3">
+  <link rel="stylesheet" href="/styles.css?v=4">
   <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script defer src="/app.js?v=3"></script>
+  <script defer src="/app.js?v=4"></script>
+  <style>
+    .users-dialog{width:min(980px,calc(100% - 28px));border:0;border-radius:22px;padding:26px;box-shadow:0 30px 90px rgba(4,25,42,.28);color:var(--text)}
+    .users-dialog-header{margin-bottom:20px}.users-layout{display:grid;grid-template-columns:minmax(260px,.7fr) minmax(0,1.3fr);gap:22px}.user-form{background:#f7f9fb;border:1px solid var(--line-soft);border-radius:16px;padding:18px;align-self:start}
+    .user-form>label{display:grid;gap:7px;font-size:11px;font-weight:800;color:#455d70;margin-top:12px}.user-form input,.user-form select{width:100%;border:1px solid var(--line);background:#fff;border-radius:10px;padding:11px 12px;color:var(--text);outline:0;min-height:43px}.user-form .button{width:100%;margin-top:15px}
+    .users-list-section{min-width:0}.users-list-heading{display:flex;align-items:center;justify-content:space-between;padding:3px 2px 14px;border-bottom:1px solid var(--line-soft)}.users-list-heading div{display:grid;gap:3px}.users-list-heading strong{font-size:14px;color:var(--navy-950)}.users-list-heading small{font-size:10px;color:var(--muted)}.users-list-heading>span{min-width:34px;height:34px;border-radius:10px;background:#e8f1f8;color:var(--navy-800);display:grid;place-items:center;font-weight:900}
+    .users-list{display:grid;gap:9px;margin-top:13px;max-height:420px;overflow:auto;padding-left:3px}.user-row{display:grid;grid-template-columns:42px minmax(0,1fr) auto;align-items:center;gap:11px;border:1px solid var(--line-soft);border-radius:13px;padding:11px;background:#fff}.user-row.inactive{opacity:.62;background:#f5f6f7}.user-row-avatar{width:42px;height:42px;border-radius:12px;background:linear-gradient(145deg,#e8f1f8,#d9e9f4);color:var(--navy-800);display:grid;place-items:center;font-weight:900}
+    .user-row-info{display:grid;gap:3px;min-width:0}.user-row-info strong{font-size:12px;color:var(--navy-950)}.user-row-info small{font-size:10px;color:var(--muted);direction:ltr;text-align:right;overflow:hidden;text-overflow:ellipsis}.user-row-meta{display:flex;align-items:center;gap:7px}.role-badge{border-radius:999px;padding:6px 9px;font-size:9px;font-weight:900;background:#e8f1f8;color:var(--navy-800)}.role-badge.admin{background:#f1ebfb;color:#69469a}.user-toggle{border:1px solid var(--line);background:#fff;color:var(--navy-900);border-radius:9px;padding:7px 9px;font-size:9px;font-weight:800;cursor:pointer}.user-toggle.activate{color:var(--green);border-color:#bfe3d3}.user-toggle.deactivate{color:var(--red);border-color:#efcccc}.empty-users{padding:35px;text-align:center;color:var(--muted);font-size:11px}
+    @media(max-width:760px){.users-dialog{padding:18px 14px}.users-layout{grid-template-columns:1fr}.users-list{max-height:300px}.user-row{grid-template-columns:38px minmax(0,1fr)}.user-row-avatar{width:38px;height:38px}.user-row-meta{grid-column:1/3;justify-content:flex-start}.header-actions #manageUsersButton{font-size:0;padding:10px}.header-actions #manageUsersButton span{font-size:15px}}
+  </style>
 </head>
 <body>
   <header class="app-header">
@@ -19,7 +28,8 @@
       </div>
       <div class="header-actions">
         <div class="connection-pill"><span></span>النظام متصل</div>
-        <div class="user-chip" title="المستخدم الحالي"><span class="user-avatar">م</span><div><small>المراقب الحالي</small><strong id="viewerEmail">حساب مصرح</strong></div></div>
+        <div class="user-chip" title="المستخدم الحالي"><span class="user-avatar">م</span><div><small id="viewerRole">المراقب الحالي</small><strong id="viewerEmail">حساب مصرح</strong></div></div>
+        <button id="manageUsersButton" class="button button-secondary hidden" type="button"><span>♙</span> المستخدمون</button>
         <button id="newIncidentButton" class="button button-primary" type="button"><span>＋</span> إنشاء بلاغ</button>
       </div>
     </div>
@@ -98,6 +108,28 @@
     <pre id="generatedMessage"></pre>
     <div class="dialog-actions"><button id="copyMessageButton" class="button button-primary" type="button">نسخ رسالة التبليغ</button><button id="doneButton" class="button button-secondary" type="button">إغلاق</button></div>
     <button id="closeMessageButton" class="icon-button floating-close" type="button" aria-label="إغلاق">×</button>
+  </dialog>
+
+  <dialog id="usersDialog" class="users-dialog">
+    <div class="dialog-header users-dialog-header">
+      <div class="dialog-title"><span class="dialog-badge">إدارة</span><div><p>صلاحيات النظام</p><h2>المراقبون والمستخدمون</h2></div></div>
+      <button id="closeUsersButton" class="icon-button" type="button" aria-label="إغلاق">×</button>
+    </div>
+    <div class="users-layout">
+      <form id="userForm" class="user-form">
+        <div class="form-intro"><span>＋</span><p><strong>إضافة مستخدم</strong><small>سيدخل المستخدم برمز تحقق يصل إلى بريده.</small></p></div>
+        <label>اسم المستخدم <span class="required">*</span><input name="full_name" required autocomplete="off" placeholder="مثال: أحمد محمد"></label>
+        <label>البريد الإلكتروني <span class="required">*</span><input name="email" type="email" required autocomplete="off" placeholder="name@company.com" dir="ltr"></label>
+        <label>الصلاحية<select name="role"><option value="monitor">مراقب</option><option value="admin">مدير نظام</option></select></label>
+        <div id="userFormError" class="form-error hidden"></div>
+        <button id="saveUserButton" class="button button-primary" type="submit">إضافة المستخدم</button>
+      </form>
+      <section class="users-list-section">
+        <div class="users-list-heading"><div><strong>المستخدمون المسجلون</strong><small>يمكنك تعطيل الحساب أو إعادة تفعيله.</small></div><span id="usersCount">٠</span></div>
+        <div id="usersLoading" class="loading-state hidden"><span></span> جارٍ تحميل المستخدمين…</div>
+        <div id="usersList" class="users-list"></div>
+      </section>
+    </div>
   </dialog>
   <div id="toast" class="toast" role="status"></div>
 </body>
