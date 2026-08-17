@@ -11,7 +11,7 @@
     {
       "binding": "DB",
       "database_name": "gps-incidents",
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "database_id": "391b2dcf-3a0f-490b-b90d-fbf8286f7c98",
       "migrations_dir": "migrations"
     }
   ],
