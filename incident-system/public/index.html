@@ -3,83 +3,102 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0b3558">
-  <title>نظام بلاغات GPS</title>
-  <link rel="stylesheet" href="/styles.css">
+  <meta name="theme-color" content="#102f4f">
+  <meta name="description" content="نظام داخلي لإنشاء ومتابعة بلاغات أسطول GPS">
+  <title>مركز بلاغات GPS</title>
+  <link rel="stylesheet" href="/styles.css?v=2">
   <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script defer src="/app.js"></script>
+  <script defer src="/app.js?v=2"></script>
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand"><span class="brand-mark">G</span><div><strong>نظام بلاغات GPS</strong><small>المتابعة التشغيلية للأسطول</small></div></div>
-    <button id="newIncidentButton" class="primary-button" type="button">+ إنشاء بلاغ</button>
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"><span></span>GPS</span>
+        <div class="brand-copy"><strong>مركز بلاغات الأسطول</strong><small>منصة المتابعة التشغيلية</small></div>
+      </div>
+      <div class="header-actions">
+        <div class="connection-pill"><span></span>النظام متصل</div>
+        <div class="user-chip" title="المستخدم الحالي"><span class="user-avatar">م</span><div><small>المراقب الحالي</small><strong id="viewerEmail">حساب مصرح</strong></div></div>
+        <button id="newIncidentButton" class="button button-primary" type="button"><span>＋</span> إنشاء بلاغ</button>
+      </div>
+    </div>
   </header>
 
   <main class="page-shell">
-    <section class="intro">
-      <div><p class="eyebrow">لوحة المراقب</p><h1>إدارة البلاغات من مكان واحد</h1><p>أنشئ البلاغ، انسخ رسالة التبليغ، وتابع حالته حتى الإغلاق.</p></div>
-      <div class="today-box"><span>تاريخ اليوم</span><strong id="todayLabel">—</strong></div>
+    <section class="hero">
+      <div class="hero-content">
+        <span class="hero-kicker">غرفة التحكم والمتابعة</span>
+        <h1>إدارة البلاغات التشغيلية<br><em>بسرعة ووضوح.</em></h1>
+        <p>أنشئ البلاغ، احصل على رسالة جاهزة للتبليغ، وتابع الحالة حتى الإغلاق من شاشة واحدة.</p>
+        <div class="hero-actions"><button class="button button-light" type="button" data-create-type="stop">إنشاء بلاغ الآن</button><button id="heroExportButton" class="button button-ghost" type="button">تنزيل سجل Excel</button></div>
+      </div>
+      <div class="hero-side" aria-label="معلومات اليوم">
+        <article class="date-card"><span class="calendar-icon" aria-hidden="true">17</span><div><small>تاريخ اليوم</small><strong id="todayLabel">—</strong></div></article>
+        <article class="hero-note"><span aria-hidden="true">✓</span><p><strong>ترقيم تلقائي ودقيق</strong><small>يُحفظ كل بلاغ فوراً في قاعدة البيانات.</small></p></article>
+      </div>
     </section>
 
     <section class="metrics" aria-label="ملخص البلاغات">
-      <article><span>إجمالي البلاغات</span><strong id="totalMetric">٠</strong></article>
-      <article class="metric-open"><span>مفتوحة</span><strong id="openMetric">٠</strong></article>
-      <article class="metric-progress"><span>تحت المتابعة</span><strong id="progressMetric">٠</strong></article>
-      <article class="metric-closed"><span>مغلقة</span><strong id="closedMetric">٠</strong></article>
+      <article><div class="metric-icon metric-all" aria-hidden="true">≡</div><div><span>إجمالي البلاغات</span><strong id="totalMetric">٠</strong><small>ضمن نتيجة البحث الحالية</small></div></article>
+      <article><div class="metric-icon metric-open" aria-hidden="true">!</div><div><span>بلاغات مفتوحة</span><strong id="openMetric">٠</strong><small>تحتاج إجراء أو متابعة</small></div></article>
+      <article><div class="metric-icon metric-progress" aria-hidden="true">↻</div><div><span>تحت المتابعة</span><strong id="progressMetric">٠</strong><small>جاري التعامل معها</small></div></article>
+      <article><div class="metric-icon metric-closed" aria-hidden="true">✓</div><div><span>بلاغات مغلقة</span><strong id="closedMetric">٠</strong><small>تم اتخاذ الإجراء</small></div></article>
     </section>
 
-    <section class="type-actions" aria-label="إنشاء سريع">
-      <button data-create-type="stop"><span class="type-icon stop-icon">■</span><b>بلاغ توقف</b><small>توقف المركبة أو المعدة</small></button>
-      <button data-create-type="speed"><span class="type-icon speed-icon">↗</span><b>بلاغ سرعة</b><small>تجاوز الحد المعتمد</small></button>
-      <button data-create-type="workshop"><span class="type-icon workshop-icon">⌂</span><b>دخول ورشة</b><small>تسجيل الدخول والمتابعة</small></button>
-      <button data-create-type="fuel"><span class="type-icon fuel-icon">◒</span><b>استهلاك ديزل</b><small>فرق أو حالة غير طبيعية</small></button>
+    <section class="quick-section">
+      <div class="section-title"><div><span class="section-kicker">إنشاء سريع</span><h2>اختر نوع البلاغ</h2></div><p>سيُنشئ النظام الرقم والتاريخ والوقت آلياً.</p></div>
+      <div class="type-actions" aria-label="أنواع البلاغات">
+        <button data-create-type="stop" class="type-card type-stop"><span class="type-icon">■</span><span class="type-copy"><b>بلاغ توقف</b><small>توقف مركبة أو معدة</small></span><span class="type-arrow">←</span></button>
+        <button data-create-type="speed" class="type-card type-speed"><span class="type-icon">↗</span><span class="type-copy"><b>تجاوز سرعة</b><small>رصد سرعة أعلى من الحد</small></span><span class="type-arrow">←</span></button>
+        <button data-create-type="workshop" class="type-card type-workshop"><span class="type-icon">⚙</span><span class="type-copy"><b>دخول ورشة</b><small>تسجيل الدخول والصيانة</small></span><span class="type-arrow">←</span></button>
+        <button data-create-type="fuel" class="type-card type-fuel"><span class="type-icon">◐</span><span class="type-copy"><b>استهلاك ديزل</b><small>فرق أو استهلاك غير طبيعي</small></span><span class="type-arrow">←</span></button>
+      </div>
     </section>
 
     <section class="records-panel">
-      <div class="section-heading"><div><p class="eyebrow">السجل المركزي</p><h2>البلاغات المسجلة</h2></div><button id="exportButton" class="secondary-button" type="button">تصدير Excel</button></div>
-      <div class="filters">
-        <input id="searchInput" type="search" placeholder="بحث برقم البلاغ أو كود المعدة">
-        <select id="dateFilter"><option value="">كل التواريخ</option></select>
-        <select id="typeFilter"><option value="">كل الأنواع</option><option value="stop">توقف</option><option value="speed">سرعة</option><option value="workshop">ورشة</option><option value="fuel">ديزل</option></select>
-        <select id="statusFilter"><option value="">كل الحالات</option><option value="open">مفتوح</option><option value="in_progress">تحت المتابعة</option><option value="closed">مغلق</option></select>
+      <div class="records-header"><div><span class="section-kicker">السجل المركزي</span><h2>البلاغات المسجلة</h2><p>ابحث وفلتر وغيّر حالة البلاغ مباشرة.</p></div><button id="exportButton" class="button button-secondary" type="button"><span>⇩</span> تصدير Excel</button></div>
+      <div class="filters" aria-label="فلاتر سجل البلاغات">
+        <label class="search-box"><span aria-hidden="true">⌕</span><input id="searchInput" type="search" placeholder="بحث برقم البلاغ أو كود المعدة" aria-label="بحث"></label>
+        <select id="dateFilter" aria-label="فلتر التاريخ"><option value="">كل التواريخ</option></select>
+        <select id="typeFilter" aria-label="فلتر النوع"><option value="">كل الأنواع</option><option value="stop">توقف</option><option value="speed">سرعة</option><option value="workshop">ورشة</option><option value="fuel">ديزل</option></select>
+        <select id="statusFilter" aria-label="فلتر الحالة"><option value="">كل الحالات</option><option value="open">مفتوح</option><option value="in_progress">تحت المتابعة</option><option value="closed">مغلق</option></select>
       </div>
-      <div id="loadingState" class="loading-state">جارٍ تحميل البلاغات…</div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>رقم البلاغ</th><th>النوع</th><th>كود المعدة</th><th>التاريخ والوقت</th><th>الموقع</th><th>الحالة</th><th>الإجراء</th></tr></thead>
-          <tbody id="incidentsTable"></tbody>
-        </table>
-      </div>
+      <div id="loadingState" class="loading-state"><span></span> جارٍ تحميل البلاغات…</div>
+      <div class="table-wrap"><table><thead><tr><th>رقم البلاغ</th><th>النوع</th><th>كود المعدة</th><th>التاريخ والوقت</th><th>الموقع</th><th>الحالة</th><th>الإجراء</th></tr></thead><tbody id="incidentsTable"></tbody></table></div>
     </section>
   </main>
 
+  <footer class="app-footer"><span>نظام بلاغات GPS</span><small>بيانات تشغيلية محفوظة وآمنة</small></footer>
+
   <dialog id="incidentDialog" class="incident-dialog">
     <form id="incidentForm" method="dialog">
-      <div class="dialog-header"><div><p class="eyebrow">بلاغ جديد</p><h2 id="formTitle">إنشاء بلاغ</h2></div><button id="closeDialogButton" class="icon-button" type="button" aria-label="إغلاق">×</button></div>
+      <div class="dialog-header"><div class="dialog-title"><span class="dialog-badge">بلاغ جديد</span><div><p>إنشاء سجل تشغيلي</p><h2 id="formTitle">إنشاء بلاغ</h2></div></div><button id="closeDialogButton" class="icon-button" type="button" aria-label="إغلاق">×</button></div>
+      <div class="form-intro"><span>1</span><p><strong>بيانات البلاغ</strong><small>الرقم والتاريخ والوقت ستُضاف تلقائياً بعد الحفظ.</small></p></div>
       <div class="form-grid">
-        <label>نوع البلاغ<select id="incidentType" name="incident_type" required><option value="stop">توقف</option><option value="speed">سرعة</option><option value="workshop">دخول ورشة</option><option value="fuel">استهلاك ديزل</option></select></label>
-        <label>كود المعدة / المركبة<input name="equipment_code" required autocomplete="off" placeholder="مثال: HT-25-STH-1338"></label>
+        <label>نوع البلاغ<select id="incidentType" name="incident_type" required><option value="stop">توقف</option><option value="speed">تجاوز سرعة</option><option value="workshop">دخول ورشة</option><option value="fuel">استهلاك ديزل</option></select></label>
+        <label>كود المعدة / المركبة <span class="required">*</span><input name="equipment_code" required autocomplete="off" placeholder="مثال: HT-25-STH-1338"></label>
         <label>المشروع / الفرع<input name="project_name" autocomplete="off" placeholder="مثال: مشروع نيوم"></label>
         <label>الموقع / Zone<input name="location_name" autocomplete="off" placeholder="اسم الموقع أو المنطقة"></label>
         <label>اسم المراقب<input name="observer_name" autocomplete="name" placeholder="اسم مسجل البلاغ"></label>
       </div>
-
       <div id="stopFields" class="conditional-fields"><label>مدة التوقف<input name="stop_duration" placeholder="مثال: 3 ساعات و20 دقيقة"></label></div>
       <div id="speedFields" class="conditional-fields hidden"><label>السرعة المسجلة<input name="recorded_speed" type="number" min="0" step="0.1" placeholder="كم/س"></label><label>الحد المعتمد<input name="speed_limit" type="number" min="0" step="0.1" placeholder="كم/س"></label></div>
       <div id="workshopFields" class="conditional-fields hidden"><label>اسم الورشة<input name="workshop_name" placeholder="اسم الورشة أو المنطقة"></label><label>سبب الدخول<input name="entry_reason" placeholder="صيانة، عطل، فحص..."></label></div>
       <div id="fuelFields" class="conditional-fields hidden"><label>قراءة الوقود قبل<input name="fuel_before" type="number" min="0" step="0.1" placeholder="لتر"></label><label>قراءة الوقود بعد<input name="fuel_after" type="number" min="0" step="0.1" placeholder="لتر"></label></div>
-      <label class="full-field">تفاصيل إضافية<textarea name="details" rows="3" placeholder="اكتب أي ملاحظات مهمة للمتابعة"></textarea></label>
+      <label class="full-field reason-field">سبب التبليغ <span class="required">*</span><textarea name="details" rows="3" required placeholder="مثال: توقف المعدة لأكثر من 3 ساعات دون حركة"></textarea><small>سيظهر هذا النص مباشرة في رسالة التبليغ.</small></label>
       <div id="formError" class="form-error hidden"></div>
-      <div class="dialog-actions"><button id="cancelButton" class="secondary-button" type="button">إلغاء</button><button id="submitButton" class="primary-button" type="submit">حفظ وإنشاء الرسالة</button></div>
+      <div class="dialog-actions"><button id="cancelButton" class="button button-secondary" type="button">إلغاء</button><button id="submitButton" class="button button-primary" type="submit">حفظ وإنشاء الرسالة</button></div>
     </form>
   </dialog>
 
   <dialog id="messageDialog" class="message-dialog">
-    <div class="dialog-header"><div><p class="eyebrow">تم إنشاء البلاغ</p><h2 id="createdReportNumber">—</h2></div><button id="closeMessageButton" class="icon-button" type="button" aria-label="إغلاق">×</button></div>
+    <div class="success-mark" aria-hidden="true">✓</div>
+    <div class="message-heading"><span>تم حفظ البلاغ بنجاح</span><h2 id="createdReportNumber">—</h2><p>رسالة التبليغ جاهزة للنسخ والمشاركة.</p></div>
     <pre id="generatedMessage"></pre>
-    <div class="dialog-actions"><button id="copyMessageButton" class="primary-button" type="button">نسخ رسالة التبليغ</button><button id="doneButton" class="secondary-button" type="button">تم</button></div>
+    <div class="dialog-actions"><button id="copyMessageButton" class="button button-primary" type="button">نسخ رسالة التبليغ</button><button id="doneButton" class="button button-secondary" type="button">إغلاق</button></div>
+    <button id="closeMessageButton" class="icon-button floating-close" type="button" aria-label="إغلاق">×</button>
   </dialog>
-
   <div id="toast" class="toast" role="status"></div>
 </body>
 </html>
