@@ -46,15 +46,27 @@ function buildMessage(incident) {
 }
 
 function accessEmail(request) {
-  return text(request.headers.get('Cf-Access-Authenticated-User-Email') || '', 200);
+  return text(request.headers.get('Cf-Access-Authenticated-User-Email') || '', 200).toLowerCase();
 }
 
-function requireAccess(request, env) {
-  if (env.REQUIRE_ACCESS !== 'true') return null;
-  return accessEmail(request) ? null : json({ error: 'الدخول غير مصرح. افتح الموقع عبر حساب العمل.' }, 401);
+async function currentUser(request, env) {
+  const email = accessEmail(request);
+  if (!email) return null;
+  return env.DB.prepare(`
+    SELECT id, email, full_name, role, active, created_at, updated_at
+    FROM app_users WHERE email = ? COLLATE NOCASE AND active = 1
+  `).bind(email).first();
 }
 
-async function listIncidents(request, env) {
+function unauthorized(message = 'هذا البريد غير مسجل أو أن الحساب معطل.') {
+  return json({ error: message }, 403);
+}
+
+function requireAdmin(user) {
+  return user?.role === 'admin' ? null : unauthorized('هذه العملية متاحة لمدير النظام فقط.');
+}
+
+async function listIncidents(request, env, user) {
   const url = new URL(request.url);
   const clauses = [];
   const bindings = [];
@@ -70,10 +82,10 @@ async function listIncidents(request, env) {
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   const query = `SELECT * FROM incidents ${where} ORDER BY reported_at DESC LIMIT ?`;
   const result = await env.DB.prepare(query).bind(...bindings, limit).all();
-  return json({ incidents: result.results || [], viewer_email: accessEmail(request) });
+  return json({ incidents: result.results || [], current_user: user });
 }
 
-async function createIncident(request, env) {
+async function createIncident(request, env, user) {
   const body = await request.json().catch(() => null);
   if (!body) return json({ error: 'بيانات البلاغ غير صالحة.' }, 400);
   const incidentType = text(body.incident_type, 30);
@@ -108,7 +120,7 @@ async function createIncident(request, env) {
     fuel_before: numberOrNull(body.fuel_before),
     fuel_after: numberOrNull(body.fuel_after),
     observer_name: text(body.observer_name, 120),
-    observer_email: accessEmail(request),
+    observer_email: user.email,
     reported_at: iso,
     created_at: iso,
     updated_at: iso
@@ -145,17 +157,78 @@ async function updateIncident(request, env, id) {
   return row ? json({ incident: row }) : json({ error: 'البلاغ غير موجود.' }, 404);
 }
 
+async function listUsers(env) {
+  const result = await env.DB.prepare(`
+    SELECT id, email, full_name, role, active, created_by, created_at, updated_at
+    FROM app_users ORDER BY active DESC, role ASC, full_name COLLATE NOCASE ASC
+  `).all();
+  return json({ users: result.results || [] });
+}
+
+async function createUser(request, env, admin) {
+  const body = await request.json().catch(() => null);
+  const email = text(body?.email, 200).toLowerCase();
+  const fullName = text(body?.full_name, 150);
+  const role = text(body?.role, 30) || 'monitor';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'أدخل بريدًا إلكترونيًا صحيحًا.' }, 400);
+  if (!fullName) return json({ error: 'اسم المستخدم مطلوب.' }, 400);
+  if (!['admin', 'monitor'].includes(role)) return json({ error: 'الصلاحية غير صحيحة.' }, 400);
+  const now = new Date().toISOString();
+  const user = await env.DB.prepare(`
+    INSERT INTO app_users (email, full_name, role, active, created_by, created_at, updated_at)
+    VALUES (?, ?, ?, 1, ?, ?, ?)
+    ON CONFLICT(email) DO UPDATE SET
+      full_name = excluded.full_name,
+      role = excluded.role,
+      active = 1,
+      updated_at = excluded.updated_at
+    RETURNING id, email, full_name, role, active, created_by, created_at, updated_at
+  `).bind(email, fullName, role, admin.email, now, now).first();
+  return json({ user }, 201);
+}
+
+async function updateUser(request, env, id, admin) {
+  const body = await request.json().catch(() => null);
+  if (!body) return json({ error: 'بيانات المستخدم غير صالحة.' }, 400);
+  const existing = await env.DB.prepare('SELECT * FROM app_users WHERE id = ?').bind(id).first();
+  if (!existing) return json({ error: 'المستخدم غير موجود.' }, 404);
+  const role = body.role === undefined ? existing.role : text(body.role, 30);
+  const active = body.active === undefined ? existing.active : (body.active ? 1 : 0);
+  if (!['admin', 'monitor'].includes(role)) return json({ error: 'الصلاحية غير صحيحة.' }, 400);
+  if (existing.email.toLowerCase() === admin.email.toLowerCase() && (!active || role !== 'admin')) {
+    return json({ error: 'لا يمكنك تعطيل حسابك الإداري أو إزالة صلاحية المدير منه.' }, 400);
+  }
+  const user = await env.DB.prepare(`
+    UPDATE app_users SET role = ?, active = ?, updated_at = ? WHERE id = ?
+    RETURNING id, email, full_name, role, active, created_by, created_at, updated_at
+  `).bind(role, active, new Date().toISOString(), id).first();
+  return json({ user });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname.startsWith('/api/')) {
-      const denied = requireAccess(request, env);
-      if (denied) return denied;
       try {
-        if (url.pathname === '/api/incidents' && request.method === 'GET') return listIncidents(request, env);
-        if (url.pathname === '/api/incidents' && request.method === 'POST') return createIncident(request, env);
+        const user = await currentUser(request, env);
+        if (!user) return unauthorized();
+        if (url.pathname === '/api/incidents' && request.method === 'GET') return listIncidents(request, env, user);
+        if (url.pathname === '/api/incidents' && request.method === 'POST') return createIncident(request, env, user);
         const match = url.pathname.match(/^\/api\/incidents\/(\d+)$/);
         if (match && request.method === 'PATCH') return updateIncident(request, env, Number(match[1]));
+        if (url.pathname === '/api/users' && request.method === 'GET') {
+          const denied = requireAdmin(user); if (denied) return denied;
+          return listUsers(env);
+        }
+        if (url.pathname === '/api/users' && request.method === 'POST') {
+          const denied = requireAdmin(user); if (denied) return denied;
+          return createUser(request, env, user);
+        }
+        const userMatch = url.pathname.match(/^\/api\/users\/(\d+)$/);
+        if (userMatch && request.method === 'PATCH') {
+          const denied = requireAdmin(user); if (denied) return denied;
+          return updateUser(request, env, Number(userMatch[1]), user);
+        }
         return json({ error: 'المسار غير موجود.' }, 404);
       } catch (error) {
         console.error(error);
