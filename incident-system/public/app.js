@@ -3,6 +3,8 @@ const $$ = (selector) => [...document.querySelectorAll(selector)];
 const TYPE_LABELS = { stop: 'توقف', speed: 'سرعة', workshop: 'دخول ورشة', fuel: 'استهلاك ديزل' };
 const STATUS_LABELS = { open: 'مفتوح', in_progress: 'تحت المتابعة', closed: 'مغلق' };
 let incidents = [];
+let currentUser = null;
+let users = [];
 
 function arabicNumber(value) { return Number(value || 0).toLocaleString('ar-SA'); }
 function formatDate(value) { return new Date(value).toLocaleString('ar-SA-u-ca-gregory', { dateStyle: 'medium', timeStyle: 'short' }); }
@@ -42,11 +44,74 @@ async function loadIncidents() {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'تعذر تحميل البلاغات.');
     incidents = data.incidents || [];
-    if (data.viewer_email) $('#viewerEmail').textContent = data.viewer_email;
+    currentUser = data.current_user || null;
+    if (currentUser) {
+      $('#viewerEmail').textContent = currentUser.email;
+      $('#viewerRole').textContent = currentUser.role === 'admin' ? 'مدير النظام' : 'مراقب';
+      $('#manageUsersButton').classList.toggle('hidden', currentUser.role !== 'admin');
+    }
     render();
   } catch (error) {
     $('#incidentsTable').innerHTML = `<tr><td colspan="7">${escapeHtml(error.message)}</td></tr>`;
   } finally { $('#loadingState').classList.add('hidden'); }
+}
+
+async function loadUsers() {
+  $('#usersLoading').classList.remove('hidden');
+  try {
+    const response = await fetch('/api/users');
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'تعذر تحميل المستخدمين.');
+    users = data.users || [];
+    renderUsers();
+  } catch (error) {
+    $('#usersList').innerHTML = `<div class="form-error">${escapeHtml(error.message)}</div>`;
+  } finally { $('#usersLoading').classList.add('hidden'); }
+}
+
+function renderUsers() {
+  $('#usersCount').textContent = arabicNumber(users.length);
+  $('#usersList').innerHTML = users.map(user => `
+    <article class="user-row ${user.active ? '' : 'inactive'}">
+      <span class="user-row-avatar">${escapeHtml((user.full_name || user.email).trim().charAt(0))}</span>
+      <div class="user-row-info"><strong>${escapeHtml(user.full_name)}</strong><small>${escapeHtml(user.email)}</small></div>
+      <div class="user-row-meta">
+        <span class="role-badge ${user.role}">${user.role === 'admin' ? 'مدير نظام' : 'مراقب'}</span>
+        <button class="user-toggle ${user.active ? 'deactivate' : 'activate'}" data-user-toggle="${user.id}" data-active="${user.active ? '1' : '0'}" type="button">${user.active ? 'تعطيل' : 'تفعيل'}</button>
+      </div>
+    </article>`).join('') || '<div class="empty-users">لا يوجد مستخدمون مسجلون.</div>';
+}
+
+async function submitUser(event) {
+  event.preventDefault();
+  const button = $('#saveUserButton');
+  const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+  button.disabled = true; button.textContent = 'جارٍ الإضافة…';
+  $('#userFormError').classList.add('hidden');
+  try {
+    const response = await fetch('/api/users', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'تعذر إضافة المستخدم.');
+    event.currentTarget.reset();
+    toast('تمت إضافة المستخدم بنجاح.');
+    await loadUsers();
+  } catch (error) {
+    $('#userFormError').textContent = error.message;
+    $('#userFormError').classList.remove('hidden');
+  } finally { button.disabled = false; button.textContent = 'إضافة المستخدم'; }
+}
+
+async function toggleUser(id, active) {
+  const response = await fetch(`/api/users/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ active: !active }) });
+  const data = await response.json();
+  if (!response.ok) return toast(data.error || 'تعذر تحديث المستخدم.');
+  toast(active ? 'تم تعطيل المستخدم.' : 'تم تفعيل المستخدم.');
+  await loadUsers();
+}
+
+async function openUsersDialog() {
+  $('#usersDialog').showModal();
+  await loadUsers();
 }
 
 function render() {
@@ -137,6 +202,13 @@ $('#doneButton').addEventListener('click', () => $('#messageDialog').close());
 $('#copyMessageButton').addEventListener('click', async () => { await navigator.clipboard.writeText($('#generatedMessage').textContent); toast('تم نسخ رسالة التبليغ.'); });
 $('#exportButton').addEventListener('click', exportExcel);
 $('#heroExportButton').addEventListener('click', exportExcel);
+$('#manageUsersButton').addEventListener('click', openUsersDialog);
+$('#closeUsersButton').addEventListener('click', () => $('#usersDialog').close());
+$('#userForm').addEventListener('submit', submitUser);
+$('#usersList').addEventListener('click', event => {
+  const button = event.target.closest('[data-user-toggle]');
+  if (button) toggleUser(Number(button.dataset.userToggle), button.dataset.active === '1');
+});
 $('#incidentsTable').addEventListener('click', event => {
   const statusButton = event.target.closest('[data-status-id]');
   const messageButton = event.target.closest('[data-message-id]');
