@@ -20,5 +20,10 @@ function serveStatic(pathname) {
 `;
 
 const deployable = staticSource + worker.replace('return env.ASSETS.fetch(request);', 'return serveStatic(url.pathname);');
+// Keep the upload payload ASCII-only so multipart transports cannot reinterpret
+// Arabic UTF-8 bytes. JavaScript decodes these escapes back to the exact text.
+const transportSafeDeployable = deployable.replace(/[^\x00-\x7F]/g, character =>
+  `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`
+);
 await mkdir(new URL('../dist/', import.meta.url), { recursive: true });
-await writeFile(new URL('../dist/worker.js', import.meta.url), deployable);
+await writeFile(new URL('../dist/worker.js', import.meta.url), transportSafeDeployable, 'ascii');
