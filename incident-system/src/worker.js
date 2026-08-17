@@ -32,31 +32,17 @@ function riyadhDateTime(date) {
 }
 
 function buildMessage(incident) {
-  const meta = TYPE_META[incident.incident_type];
-  const lines = [
-    `بلاغ ${meta.label} رقم: ${incident.report_number}`,
+  const fallbackReason = {
+    stop: incident.stop_duration ? `توقف المعدة لمدة ${incident.stop_duration}` : 'توقف المعدة',
+    speed: incident.recorded_speed !== null ? `تجاوز السرعة، السرعة المسجلة ${incident.recorded_speed} كم/س` : 'تجاوز السرعة المعتمدة',
+    workshop: incident.entry_reason || 'دخول المعدة إلى الورشة',
+    fuel: 'رصد استهلاك ديزل غير طبيعي'
+  }[incident.incident_type];
+  return [
+    `رقم البلاغ: ${incident.report_number}`,
     `كود المعدة: ${incident.equipment_code}`,
-    `تاريخ ووقت البلاغ: ${riyadhDateTime(new Date(incident.reported_at))}`
-  ];
-  if (incident.project_name) lines.push(`المشروع / الفرع: ${incident.project_name}`);
-  if (incident.location_name) lines.push(`الموقع: ${incident.location_name}`);
-  if (incident.incident_type === 'stop' && incident.stop_duration) lines.push(`مدة التوقف: ${incident.stop_duration}`);
-  if (incident.incident_type === 'speed') {
-    if (incident.recorded_speed !== null) lines.push(`السرعة المسجلة: ${incident.recorded_speed} كم/س`);
-    if (incident.speed_limit !== null) lines.push(`الحد المعتمد: ${incident.speed_limit} كم/س`);
-  }
-  if (incident.incident_type === 'workshop') {
-    if (incident.workshop_name) lines.push(`اسم الورشة: ${incident.workshop_name}`);
-    if (incident.entry_reason) lines.push(`سبب الدخول: ${incident.entry_reason}`);
-  }
-  if (incident.incident_type === 'fuel') {
-    if (incident.fuel_before !== null) lines.push(`قراءة الوقود قبل: ${incident.fuel_before} لتر`);
-    if (incident.fuel_after !== null) lines.push(`قراءة الوقود بعد: ${incident.fuel_after} لتر`);
-    if (incident.fuel_before !== null && incident.fuel_after !== null) lines.push(`الفرق: ${(incident.fuel_before - incident.fuel_after).toFixed(1)} لتر`);
-  }
-  if (incident.details) lines.push(`التفاصيل: ${incident.details}`);
-  lines.push('الحالة: مفتوح', 'يرجى المتابعة واتخاذ اللازم.');
-  return lines.join('\n');
+    `سبب التبليغ: ${incident.details || fallbackReason}`
+  ].join('\n');
 }
 
 function accessEmail(request) {
@@ -84,7 +70,7 @@ async function listIncidents(request, env) {
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   const query = `SELECT * FROM incidents ${where} ORDER BY reported_at DESC LIMIT ?`;
   const result = await env.DB.prepare(query).bind(...bindings, limit).all();
-  return json({ incidents: result.results || [] });
+  return json({ incidents: result.results || [], viewer_email: accessEmail(request) });
 }
 
 async function createIncident(request, env) {
@@ -94,6 +80,7 @@ async function createIncident(request, env) {
   const equipmentCode = text(body.equipment_code, 80).toUpperCase();
   if (!TYPE_META[incidentType]) return json({ error: 'اختر نوع بلاغ صحيحًا.' }, 400);
   if (!equipmentCode) return json({ error: 'كود المعدة مطلوب.' }, 400);
+  if (!text(body.details, 1000)) return json({ error: 'سبب التبليغ مطلوب.' }, 400);
 
   const now = new Date();
   const year = riyadhYear(now);
