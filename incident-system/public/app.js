@@ -84,15 +84,16 @@ function renderUsers() {
 
 async function submitUser(event) {
   event.preventDefault();
+  const form = event.currentTarget;
   const button = $('#saveUserButton');
-  const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+  const payload = Object.fromEntries(new FormData(form).entries());
   button.disabled = true; button.textContent = 'جارٍ الإضافة…';
   $('#userFormError').classList.add('hidden');
   try {
     const response = await fetch('/api/users', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'تعذر إضافة المستخدم.');
-    event.currentTarget.reset();
+    form.reset();
     toast('تمت إضافة المستخدم بنجاح.');
     await loadUsers();
   } catch (error) {
