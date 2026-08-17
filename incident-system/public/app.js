@@ -42,6 +42,7 @@ async function loadIncidents() {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'تعذر تحميل البلاغات.');
     incidents = data.incidents || [];
+    if (data.viewer_email) $('#viewerEmail').textContent = data.viewer_email;
     render();
   } catch (error) {
     $('#incidentsTable').innerHTML = `<tr><td colspan="7">${escapeHtml(error.message)}</td></tr>`;
@@ -61,7 +62,7 @@ function render() {
       <td>${formatDate(row.reported_at)}</td>
       <td>${escapeHtml(row.location_name || '—')}</td>
       <td><button class="status status-${row.status}" data-status-id="${row.id}" data-status="${row.status}">${STATUS_LABELS[row.status]}</button></td>
-      <td><button class="secondary-button" data-message-id="${row.id}">عرض الرسالة</button></td>
+      <td><button class="button button-secondary" data-message-id="${row.id}">عرض الرسالة</button></td>
     </tr>`).join('') || '<tr><td colspan="7">لا توجد بلاغات مطابقة.</td></tr>';
 }
 
@@ -121,7 +122,9 @@ function exportExcel() {
   XLSX.writeFile(workbook, `سجل_بلاغات_GPS_${todayKey()}.xlsx`);
 }
 
-$('#todayLabel').textContent = new Date().toLocaleDateString('ar-SA-u-ca-gregory', { timeZone: 'Asia/Riyadh', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+const today = new Date();
+$('#todayLabel').textContent = today.toLocaleDateString('ar-SA-u-ca-gregory', { timeZone: 'Asia/Riyadh', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+$('.calendar-icon').textContent = today.toLocaleDateString('ar-SA-u-ca-gregory', { timeZone: 'Asia/Riyadh', day: 'numeric' });
 $('#dateFilter').innerHTML += `<option value="${todayKey()}">بلاغات اليوم</option>`;
 $('#newIncidentButton').addEventListener('click', () => openCreateDialog());
 $$('[data-create-type]').forEach(button => button.addEventListener('click', () => openCreateDialog(button.dataset.createType)));
@@ -133,6 +136,7 @@ $('#closeMessageButton').addEventListener('click', () => $('#messageDialog').clo
 $('#doneButton').addEventListener('click', () => $('#messageDialog').close());
 $('#copyMessageButton').addEventListener('click', async () => { await navigator.clipboard.writeText($('#generatedMessage').textContent); toast('تم نسخ رسالة التبليغ.'); });
 $('#exportButton').addEventListener('click', exportExcel);
+$('#heroExportButton').addEventListener('click', exportExcel);
 $('#incidentsTable').addEventListener('click', event => {
   const statusButton = event.target.closest('[data-status-id]');
   const messageButton = event.target.closest('[data-message-id]');
