@@ -16,6 +16,6 @@
     }
   ],
   "vars": {
-    "REQUIRE_ACCESS": "false"
+    "REQUIRE_ACCESS": "true"
   }
 }
