@@ -1,0 +1,17 @@
+{
+  "name": "gps-incident-system",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.19.0",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply gps-incidents --local",
+    "db:migrate:remote": "wrangler d1 migrations apply gps-incidents --remote",
+    "check": "node --check src/worker.js && node --check public/app.js"
+  },
+  "devDependencies": {
+    "wrangler": "^4.30.0"
+  }
+}
