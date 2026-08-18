@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "gps-incident-system",
   "main": "src/worker.js",
-  "compatibility_date": "2026-08-17",
+  "compatibility_date": "2026-08-18",
   "assets": {
     "directory": "./public",
     "binding": "ASSETS"
