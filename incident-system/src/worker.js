@@ -53,7 +53,7 @@ async function currentUser(request, env) {
   const email = accessEmail(request);
   if (!email) return null;
   return env.DB.prepare(`
-    SELECT id, email, full_name, role, active, created_at, updated_at
+    SELECT id, email, full_name, role, active, can_edit_incidents, created_at, updated_at
     FROM app_users WHERE email = ? COLLATE NOCASE AND active = 1
   `).bind(email).first();
 }
@@ -64,6 +64,10 @@ function unauthorized(message = 'هذا البريد غير مسجل أو أن �
 
 function requireAdmin(user) {
   return user?.role === 'admin' ? null : unauthorized('هذه العملية متاحة لمدير النظام فقط.');
+}
+
+function canEditIncidents(user) {
+  return user?.role === 'admin' || Number(user?.can_edit_incidents) === 1;
 }
 
 async function listIncidents(request, env, user) {
@@ -145,21 +149,82 @@ async function createIncident(request, env, user) {
   return json({ incident: inserted }, 201);
 }
 
-async function updateIncident(request, env, id) {
-  const body = await request.json().catch(() => null);
+async function updateIncidentStatus(body, env, id, user) {
   const status = text(body?.status, 30);
   if (!['open', 'in_progress', 'closed'].includes(status)) return json({ error: 'الحالة غير صالحة.' }, 400);
   const now = new Date().toISOString();
   const closedAt = status === 'closed' ? now : null;
+  const closureReason = status === 'closed' ? text(body?.closure_reason, 1000) : '';
+  if (status === 'closed' && !closureReason) return json({ error: 'سبب إغلاق البلاغ مطلوب.' }, 400);
   const row = await env.DB.prepare(`
-    UPDATE incidents SET status = ?, closed_at = ?, updated_at = ? WHERE id = ? RETURNING *
-  `).bind(status, closedAt, now, id).first();
+    UPDATE incidents SET
+      status = ?, closed_at = ?, closure_reason = ?,
+      closed_by_name = ?, closed_by_email = ?, updated_at = ?
+    WHERE id = ? RETURNING *
+  `).bind(
+    status,
+    closedAt,
+    status === 'closed' ? closureReason : null,
+    status === 'closed' ? user.full_name : null,
+    status === 'closed' ? user.email : null,
+    now,
+    id
+  ).first();
   return row ? json({ incident: row }) : json({ error: 'البلاغ غير موجود.' }, 404);
+}
+
+async function editIncident(body, env, id, user) {
+  if (!canEditIncidents(user)) return unauthorized('ليس لديك صلاحية تعديل البلاغات.');
+  const existing = await env.DB.prepare('SELECT * FROM incidents WHERE id = ?').bind(id).first();
+  if (!existing) return json({ error: 'البلاغ غير موجود.' }, 404);
+  const equipmentCode = text(body?.equipment_code, 80).toUpperCase();
+  const details = text(body?.details, 1000);
+  if (!equipmentCode) return json({ error: 'كود المعدة مطلوب.' }, 400);
+  if (!details) return json({ error: 'سبب التبليغ مطلوب.' }, 400);
+  const now = new Date().toISOString();
+  const incident = {
+    ...existing,
+    equipment_code: equipmentCode,
+    project_name: text(body?.project_name, 150),
+    location_name: text(body?.location_name, 200),
+    details,
+    stop_duration: text(body?.stop_duration, 80),
+    recorded_speed: numberOrNull(body?.recorded_speed),
+    speed_limit: numberOrNull(body?.speed_limit),
+    workshop_name: text(body?.workshop_name, 150),
+    entry_reason: text(body?.entry_reason, 300),
+    fuel_before: numberOrNull(body?.fuel_before),
+    fuel_after: numberOrNull(body?.fuel_after),
+    observer_name: text(body?.observer_name, 120)
+  };
+  incident.message_text = buildMessage(incident);
+  const row = await env.DB.prepare(`
+    UPDATE incidents SET
+      equipment_code = ?, project_name = ?, location_name = ?, details = ?,
+      stop_duration = ?, recorded_speed = ?, speed_limit = ?, workshop_name = ?,
+      entry_reason = ?, fuel_before = ?, fuel_after = ?, observer_name = ?,
+      message_text = ?, last_edited_at = ?, last_edited_by_email = ?, updated_at = ?
+    WHERE id = ? RETURNING *
+  `).bind(
+    incident.equipment_code, incident.project_name, incident.location_name, incident.details,
+    incident.stop_duration, incident.recorded_speed, incident.speed_limit, incident.workshop_name,
+    incident.entry_reason, incident.fuel_before, incident.fuel_after, incident.observer_name,
+    incident.message_text, now, user.email, now, id
+  ).first();
+  return json({ incident: row });
+}
+
+async function updateIncident(request, env, id, user) {
+  const body = await request.json().catch(() => null);
+  if (!body) return json({ error: 'بيانات البلاغ غير صالحة.' }, 400);
+  return body.action === 'edit'
+    ? editIncident(body, env, id, user)
+    : updateIncidentStatus(body, env, id, user);
 }
 
 async function listUsers(env) {
   const result = await env.DB.prepare(`
-    SELECT id, email, full_name, role, active, created_by, created_at, updated_at
+    SELECT id, email, full_name, role, active, can_edit_incidents, created_by, created_at, updated_at
     FROM app_users ORDER BY active DESC, role ASC, full_name COLLATE NOCASE ASC
   `).all();
   return json({ users: result.results || [] });
@@ -170,20 +235,22 @@ async function createUser(request, env, admin) {
   const email = text(body?.email, 200).toLowerCase();
   const fullName = text(body?.full_name, 150);
   const role = text(body?.role, 30) || 'monitor';
+  const canEdit = (role === 'admin' || Boolean(body?.can_edit_incidents)) ? 1 : 0;
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'أدخل بريدًا إلكترونيًا صحيحًا.' }, 400);
   if (!fullName) return json({ error: 'اسم المستخدم مطلوب.' }, 400);
   if (!['admin', 'monitor'].includes(role)) return json({ error: 'الصلاحية غير صحيحة.' }, 400);
   const now = new Date().toISOString();
   const user = await env.DB.prepare(`
-    INSERT INTO app_users (email, full_name, role, active, created_by, created_at, updated_at)
-    VALUES (?, ?, ?, 1, ?, ?, ?)
+    INSERT INTO app_users (email, full_name, role, active, can_edit_incidents, created_by, created_at, updated_at)
+    VALUES (?, ?, ?, 1, ?, ?, ?, ?)
     ON CONFLICT(email) DO UPDATE SET
       full_name = excluded.full_name,
       role = excluded.role,
       active = 1,
+      can_edit_incidents = excluded.can_edit_incidents,
       updated_at = excluded.updated_at
-    RETURNING id, email, full_name, role, active, created_by, created_at, updated_at
-  `).bind(email, fullName, role, admin.email, now, now).first();
+    RETURNING id, email, full_name, role, active, can_edit_incidents, created_by, created_at, updated_at
+  `).bind(email, fullName, role, canEdit, admin.email, now, now).first();
   return json({ user }, 201);
 }
 
@@ -194,14 +261,17 @@ async function updateUser(request, env, id, admin) {
   if (!existing) return json({ error: 'المستخدم غير موجود.' }, 404);
   const role = body.role === undefined ? existing.role : text(body.role, 30);
   const active = body.active === undefined ? existing.active : (body.active ? 1 : 0);
+  const canEdit = role === 'admin' ? 1 : (
+    body.can_edit_incidents === undefined ? existing.can_edit_incidents : (body.can_edit_incidents ? 1 : 0)
+  );
   if (!['admin', 'monitor'].includes(role)) return json({ error: 'الصلاحية غير صحيحة.' }, 400);
   if (existing.email.toLowerCase() === admin.email.toLowerCase() && (!active || role !== 'admin')) {
     return json({ error: 'لا يمكنك تعطيل حسابك الإداري أو إزالة صلاحية المدير منه.' }, 400);
   }
   const user = await env.DB.prepare(`
-    UPDATE app_users SET role = ?, active = ?, updated_at = ? WHERE id = ?
-    RETURNING id, email, full_name, role, active, created_by, created_at, updated_at
-  `).bind(role, active, new Date().toISOString(), id).first();
+    UPDATE app_users SET role = ?, active = ?, can_edit_incidents = ?, updated_at = ? WHERE id = ?
+    RETURNING id, email, full_name, role, active, can_edit_incidents, created_by, created_at, updated_at
+  `).bind(role, active, canEdit, new Date().toISOString(), id).first();
   return json({ user });
 }
 
@@ -215,7 +285,7 @@ export default {
         if (url.pathname === '/api/incidents' && request.method === 'GET') return listIncidents(request, env, user);
         if (url.pathname === '/api/incidents' && request.method === 'POST') return createIncident(request, env, user);
         const match = url.pathname.match(/^\/api\/incidents\/(\d+)$/);
-        if (match && request.method === 'PATCH') return updateIncident(request, env, Number(match[1]));
+        if (match && request.method === 'PATCH') return updateIncident(request, env, Number(match[1]), user);
         if (url.pathname === '/api/users' && request.method === 'GET') {
           const denied = requireAdmin(user); if (denied) return denied;
           return listUsers(env);
